@@ -40,18 +40,18 @@ def is_viable(item_count, adj, ind_taken):
     (column in adjacency with all zeros) or if there
     is a set that must be included in any solution
     (non-sero row in column of adjacency with only 1 non-zero entry)"""
-def must_take(adj):
-    n = adj.shape[1]
+def must_take(cols):
+    n = len(cols)
     take = []
     sol = 1
     for i in range(n):
-        ind = np.where(adj[:, i] > 0)[0]
-        if len(ind) <= 0:
+        if len(cols[i]) <= 0:
             take = []
             sol = -i
             return sol, take
-        elif len(ind) == 1:
-            take.append(ind[0])
+        elif len(cols[i]) == 1:
+            j = list(cols[i])[0]
+            take.append(j)
     return sol, take
 
 """ This is a hybrid greedy algorithm. It utilizes concepts discussed in
@@ -69,7 +69,9 @@ def must_take(adj):
      by a particular row"""
 def greedy_lar(item_count, costs, before, candidates, cols, cost, items, taken, init_covered, init_sizes):
     # initialize best_cost & best_taken (the eventual solutions), as well
-    # as arrays/sets/lists used and modified by the algorithm
+    # as arrays/sets/lists used and modified by the algorithm. the function 
+    # is called multiple times so one needs to make sure anything modified
+    # by the function is a local copy.
     best_cost = costs
     best_taken = np.array(taken)
     sizes = np.array(init_sizes)
@@ -177,20 +179,33 @@ def solve_it(input_data):
     # a row/set must be taken if it is the only row/set that contains
     # (or covers) an item (i.e., row i must be taken if the only non-zero
     # in the jth column of adj occurs in row i) 
-    sol, take = must_take(adj)
+    sol, take = must_take(cols)
     # if no possible solution, exit
     if sol < 0:
         print('No coverage for ' + str(-sol))
         return
-    print('Set & Item Count ', set_count, item_count)
+    print('Set Count & Item Count ', set_count, item_count)
+    print('Sets that must be taken ', take)
     # determine which items are covered by sets that must be taken
     # covered[i] = the number of sets included in the total cost that
     # contain or cover item i. for a solution to be valid, covered[i] >= 1
-    # for all i in item_count
+    # for all i in item_count. update initial cost and initial covered
+    # set 'before'. also reduce sizes array for columns covered in taken sets
+    before = set()
+    init_cost = 0
     if len(take) > 0:
         for i in take:
             taken[i] = 1
+            init_cost += cost[i]
+            delta = items[i] - before
+            before |= items[i]
             covered[list(items[i])] += 1
+            # for each new item covered by the set, decrement the sizes[] array
+            # for non-redundant sets that have not yet been taken using the cols array
+            for k in delta:
+                for m in cols[k]:
+                    if taken[m] == 0:
+                        sizes[m] -= 1.0/cost[m]
 
            
     # determine list of items not yet covered
@@ -241,14 +256,6 @@ def solve_it(input_data):
 #    ind = np.where(taken < 0)[0]
 #    taken[ind] = 0
     
-    # determine cost of any rows that must be taken, as well as
-    # a set of all the items they cover
-    before = set()
-    init_cost = 0.0
-    ind0 = np.nonzero(taken)[0]
-    for j in ind0:
-        before |= items[j]
-        init_cost += cost[j]
         
     # initialize best solution and number of times greedy_lar will be 
     # executed. greedy_lar contains a random selection of possible
